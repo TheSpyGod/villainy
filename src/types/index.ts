@@ -1,7 +1,7 @@
-export type Store = 'epic' | 'gog' | 'amazon' | 'sideload';
+export type Store = 'epic' | 'gog' | 'amazon' | 'lutris' | 'sideload';
 
 export interface Game {
-  id: string;a
+  id: string;
   title: string;
   store: Store;
   installed: boolean;

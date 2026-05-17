@@ -9,20 +9,22 @@
 import { useEffect } from 'react';
 import { listen, EventCallback } from '@tauri-apps/api/event';
 
-export useEvent<T>(
+export function useEvent<T>(
   event: string,
   handler: EventCallback<T>,
   deps: React.DependencyList = []
 ) {
 
-  useEffect( => {
+  useEffect(() => {
     let unlisten: (() => void) | undefined;
 
     listen<T>(event, handler).then(fn => {
       unlisten = fn;
     });
 
-    return () => { unlisten?.{}; };
+    return () => {
+      unlisten?.();
+    };
   }, deps);
 
 }
