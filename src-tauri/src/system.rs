@@ -22,17 +22,10 @@ pub fn check_system<'a>() -> &'a bool {
 }
 
 pub fn check_legendary<'a>() -> &'a bool {
-    let output = if cfg!(target_os = "windows") {
-        Command::new("legendary")
-            .arg("--help")
-            .output()
-            .expect("failed to execute process")
-    } else {
-        Command::new("legendary")
-            .arg("--help")
-            .output()
-            .expect("failed to execute process")
-    };
+    let output = Command::new("legendary")
+        .arg("--help")
+        .output()
+        .expect("failed to execute process");
 
     if output.status.success() {
         return &true;
