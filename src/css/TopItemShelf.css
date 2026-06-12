@@ -1,0 +1,16 @@
+header {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 10vw;
+    padding: 2vh;
+    background-color: rgba(200, 200, 200);
+    width: fit-content;
+    border: darkgrey solid 5px;
+}
+
+header a {
+    color: white;
+    font-weight: 500;
+    text-decoration: none;
+}

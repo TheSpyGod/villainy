@@ -1,0 +1,17 @@
+html {
+    padding: 0;
+    margin: 0;
+}
+
+.main-container {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    align-items: center;
+    align-content: center;
+    padding: 0;
+    text-align: center;
+}
+footer {
+    padding: 5vh;
+}
