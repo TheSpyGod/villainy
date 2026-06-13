@@ -1,5 +1,6 @@
 use std::process::Command;
 
+#[tauri::command]
 pub fn check_system<'a>() -> &'a bool {
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd")

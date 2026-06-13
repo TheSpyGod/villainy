@@ -22,3 +22,12 @@ backend ---> legendary connection ---> legendary configuration
 //controller.rs
 
 ```
+
+#### Current features:
+-[x] System checks
+-[x] Game launch
+-[x] Backend <-> Frontend communication
+
+#### TO-DO 
+-[] Generated grid of clickable icons for games, taking the "name" from the image itself to launch it.
+-[] Instead of launching it VIA Legendary, search for the .exe and use Proton
