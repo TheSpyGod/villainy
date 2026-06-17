@@ -16,7 +16,11 @@ fn start_game(title: &str) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![startup, start_game])
+        .invoke_handler(tauri::generate_handler![
+            startup,
+            start_game,
+            legendary::controller::list_games,
+        ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri app");
 }
