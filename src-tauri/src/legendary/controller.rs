@@ -18,7 +18,7 @@ pub struct GameListResponse {
 
 #[tauri::command]
 pub fn launch_game<'a, 'b>(game_name: &str) -> &'a bool {
-    let output = Command::new("legendary")
+    let output = Command::new("../venv/bin/legendary")
         .arg("launch")
         .arg(game_name)
         .output()
@@ -33,7 +33,7 @@ pub fn launch_game<'a, 'b>(game_name: &str) -> &'a bool {
 
 #[tauri::command]
 pub fn list_games() -> Result<GameListResponse, String> {
-    let output = Command::new("legendary")
+    let output = Command::new("../venv/bin/legendary")
         .arg("list")
         .output()
         .map_err(|e| {
@@ -98,10 +98,11 @@ pub fn list_games() -> Result<GameListResponse, String> {
 }
 
 #[tauri::command]
-pub fn log_in<'a>() -> &'a bool {
-    let output = Command::new("legendary")
+pub fn log_in<'a>(code: String) -> &'a bool {
+    let output = Command::new("./venv/bin/legendary")
         .arg("auth")
-        .arg("login")
+        .arg("--code")
+        .arg(code)
         .output()
         .expect("failed to execute process");
 

@@ -4,3 +4,8 @@ packages:
 
 allowBuilds:
   esbuild: false
+  optipng-bin: false
+  pngquant-bin: false
+  sharp: false
+  tauri: false
+  zopflipng-bin: false

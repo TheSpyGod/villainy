@@ -1,4 +1,12 @@
 use std::process::Command;
+use serde::Deserialize;
+
+
+#[derive(Deserialize)]
+struct CallbackParams {
+    code: String,
+    state: String,
+}
 
 #[tauri::command]
 pub fn check_system<'a>() -> &'a bool {

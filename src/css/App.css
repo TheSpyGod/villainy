@@ -19,3 +19,13 @@ li {
 footer {
     padding: 5vh;
 }
+
+.button-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-button {
+  font-weight: 700;
+  padding: 10px;
+}

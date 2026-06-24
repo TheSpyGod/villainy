@@ -35,36 +35,71 @@ function App(): JSX.Element {
     loadInitialData();
   }, []);
 
-  const handleClick = async () => {
+  const handleGameLaunch = async (game_name) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await invoke<string>("startup");
-      setReply(res);
-    } catch (e: unknown) {
-      const msg =
-        typeof e === "object" && e !== null && "message" in e
-          ? (e as { message?: unknown }).message
-          : String(e);
-      setError(typeof msg === "string" ? msg : String(msg));
+      const res = await invoke<string>("launch_game", {game_name});
+        console.log(res);
+      } finally {
+        setLoading(false);
+      }
+  };
+
+  const handleLogin = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await invoke<string>("get_auth_code");
+        console.log(res);
+      } finally {
+        setLoading(false);
+      }
+  };
+
+  const authenticateCode = async (code) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await invoke<string>("log_in", {code})
+      console.log(res);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  if (!games) return <div> Loading ...</div>;
+
+
+  if (!games) return ( 
+  <div className="button-container">
+    <button className="login-button" onClick={(e) => {
+        e.preventDefault();
+        handleLogin();
+      }}>Get code
+    </button>
+
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        console.log("Code submitted"); 
+      }}>
+        <input 
+          id="auth-code"
+          ref={inputRef}
+          type="text" 
+          placeholder="enter your code here" 
+        />
+        <button type="submit" onClick={(e) => { e.preventDefault(); authenticateCode(inputRef.current.value)}}>Log in</button>
+      </form>
+  </div>
+      );
 
   return (
     <div className="main-container">
-      <div className="actions">
-        <button onClick={handleClick} disabled={loading}>
-          {loading ? "Loading..." : "Debug Platforms (Console Output)"}
-        </button>
-      </div>
-
         <div className="games-library">
           <h3>Your Library has {games.total} games found</h3>
         </div>
+
+        
 
       <div>
     <div>Total: {games.total}</div>

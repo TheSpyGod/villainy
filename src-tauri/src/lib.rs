@@ -1,12 +1,7 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 pub mod legendary;
 mod system;
-
-#[tauri::command]
-fn startup() {
-    system::run_checks();
-    legendary::controller::log_in();
-}
+mod redirect;
 
 #[tauri::command]
 fn start_game(title: &str) {
@@ -17,9 +12,11 @@ fn start_game(title: &str) {
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
-            startup,
             start_game,
             legendary::controller::list_games,
+            redirect::get_auth_code,
+            legendary::controller::log_in
+
         ])
         .run(tauri::generate_context!())
         .expect("Error while running tauri app");
