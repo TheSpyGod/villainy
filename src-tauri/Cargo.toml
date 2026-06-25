@@ -18,14 +18,14 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-axum = "0.7"
-serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = ["devtools"] }
+reqwest = { version = "0.11", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
-url = "2"
-rand = "0.8"
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
-serde_json = "1.0.120"
-regex = "1.12.4"
-open = "5"
-
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4", "serde"] }
+urlencoding = "2.0"
+open = "5.0"
+rusqlite = { version = "0.31", features = ["bundled", "chrono"] }
+chrono = { version = "0.4", features = ["serde"] }
+tauri-plugin-dialog = "2.7.1"

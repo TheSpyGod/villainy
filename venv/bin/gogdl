@@ -1,0 +1,510 @@
+#!/usr/bin/env lua
+-- Part of gogdl by Alex Bradbury:
+-- https://github.com/asb/gogdl
+
+------ Settings
+local CONFIG_DIR = assert(os.getenv("HOME")) .. "/.gogdl"
+local COOKIE_JAR = CONFIG_DIR .. "/cookiejar.txt"
+local FILE_LIST = CONFIG_DIR .. "/available_files"
+local WGET_OPTS = os.getenv("WGET_OPTS") or ""
+
+------ Constants you shouldn't change
+local LOGIN_URL = "https://www.gog.com/en/login/"
+local ACCOUNT_URL = "https://www.gog.com/en/myaccount/"
+local USER_AGENT = "gogdl (github.com/asb/gogdl)"
+
+------ Generic helpers
+
+local function err_exit(msg, ...)
+	io.stderr:write(msg:format(...))
+	os.exit(1)
+end
+
+local function exec(command, ...)
+	local formatted = command:format(...)
+	local res = os.execute(command:format(...))
+	return res == 0, formatted
+end
+
+-- Exec and check result
+local function cexec(command, ...)
+	local res, comm = exec(command, ...)
+	if not res then
+		err_exit("Command: `%s` returned a non-zero exit value\n", comm)
+	end
+	return res
+end
+
+function url_encode(s)
+	s = string.gsub(s, "([@&=+%c])", function(c)
+		return string.format("%%%02X", string.byte(c))
+	end)
+	s = string.gsub(s, " ", "+")
+	return s
+end
+
+local function capture(command, ...)
+	local pipe = assert(io.popen(command:format(...)))
+	local data = assert(pipe:read("*a"))
+	assert(pipe:close())
+	return data
+end
+
+local function uniq(t)
+	local newt = {}
+	local seen_vals = {}
+	for _, v in ipairs(t) do
+		if not seen_vals[v] then
+			seen_vals[v] = true
+			newt[#newt + 1] = v
+		end
+	end
+	return newt
+end
+
+------ wget helpers
+local wget = {}
+function wget.download_file(url, dest, exec_func)
+	return exec_func(
+		'wget %s -U "%s" -O "%s" --load-cookies="%s" -c "%s"',
+		WGET_OPTS,
+		USER_AGENT,
+		dest,
+		COOKIE_JAR,
+		url
+	)
+end
+
+function wget.get_metadata(url, disable_redirect)
+	local redirect_opt = disable_redirect and "--max-redirect=0" or ""
+	return capture(
+		'wget %s -U "%s" -o /dev/stdout --spider %s --load-cookies="%s" "%s" | tee /dev/stderr',
+		WGET_OPTS,
+		USER_AGENT,
+		redirect_opt,
+		COOKIE_JAR,
+		url
+	)
+end
+
+------ gogdl implementation
+local actions = {}
+actions.login = function(arg)
+	-- Get username and pass
+	io.stdout:write("GOG registered email: ")
+	local gog_email = assert(io.stdin:read("*l"))
+	io.stdout:write("GOG password: ")
+	cexec("stty -echo")
+	local gog_pass = assert(io.stdin:read("*l"))
+	cexec("stty echo")
+	io.stdout:write("\n")
+
+	cexec(
+		'wget -U "%s" -O /dev/null --save-cookie "%s" --post-data "log_email=%s&log_password=%s" "%s"',
+		USER_AGENT,
+		COOKIE_JAR,
+		url_encode(gog_email),
+		url_encode(gog_pass),
+		LOGIN_URL
+	)
+	cexec('chmod 600 "%s"', COOKIE_JAR)
+	local cookies = assert(io.open(COOKIE_JAR):read("*a"))
+	-- Check login was successful by checking the guc_al cookie is non-zero
+	local guc_al = cookies:match("guc_al%s+([%w%%]+)")
+	if guc_al and guc_al ~= "0" then
+		print("Login success")
+		os.exit(0)
+	else
+		err_exit("Login failed\n")
+	end
+end
+
+local function read_available_files()
+	local fh = io.open(FILE_LIST)
+	if not fh then
+		io.stderr:write("Warning: Not able to open the list of available files. Try gogdl getlist")
+		return {}
+	end
+	local list = {}
+	for line in fh:lines() do
+		list[#list + 1] = line
+	end
+	assert(fh:close())
+	return list
+end
+
+local function user_input_to_urls(arg, available_files)
+	local list = {}
+	for _, term in ipairs(arg) do
+		if term:match("^https?://") then
+			local relative_url = term:match("https?://www.gog.com(/en/download/.*)$")
+			if not relative_url then
+				err_exit("Error: URL '%s' not recognised as a GOG download URL\n", term)
+			end
+			list[#list + 1] = relative_url
+		elseif term:match("([%w]+/[%w_]+/[%d]+)/?$") then
+			local relative_url = term:match("(file/[%w_]+/[%d]+)/?$") or term:match("(game/[%w_]+/[%d]+)/?$")
+			if not relative_url then
+				err_exit("Error: URL fragment '%s' not recognised\n", term)
+			end
+			list[#list + 1] = "/en/download/" .. relative_url
+		elseif term:match("^@") then
+			local add_setup = (term:match("%-all$") or term:match("%-setup")) and true or false
+			local add_extras = (term:match("%-all$") or term:match("%-extras")) and true or false
+			local add_checksums = (term:match("%-all") or term:match("%-checksums")) and true or false
+			if not add_setup and not add_extras and not add_checksums then
+				err_exit(
+					"Error: @-style specifiers must end in -all, -setup, -extras,"
+						.. "or -checksums but '%s' does not\n",
+					term
+				)
+			end
+			local gamename = term:match("^@([%w_]+)%-")
+			local had_a_match = false
+			for _, file_url in ipairs(available_files) do
+				if add_setup and file_url:match("game/" .. gamename .. "/[%d]+$") then
+					had_a_match = true
+					list[#list + 1] = file_url
+				elseif add_extras and file_url:match("file/" .. gamename .. "/[%d]+$") then
+					had_a_match = true
+					list[#list + 1] = file_url
+				end
+
+				-- currently checksums are only available for game setup files
+				if add_checksums and file_url:match("game/" .. gamename .. "/[%d]+$") then
+					had_a_match = true
+					-- prepend the url with @checksums as it must be treated specially
+					list[#list + 1] = "@checksums" .. file_url
+				end
+			end
+
+			if not had_a_match then
+				err_exit(
+					"Error: Got no matches for '%s'. Try gogdl getlist,"
+						.. "and if that is already up to date perhaps you don't own the game\n",
+					term
+				)
+			end
+		else
+			err_exit("Error: Input '%s' is not recognised as a valid filter type\n", term)
+		end
+	end
+	local uniq_list = uniq(list)
+	return uniq_list
+end
+
+local function get_checksum_filename_and_url(filename, response)
+	-- append .xml to the target filename and modify the target of the
+	-- redirect appropriately
+	local dest_url = response:match("\nLocation:%s+(http://[^%s]+)")
+	dest_url = dest_url:gsub("%?", ".xml?", 1)
+	return filename .. ".xml", dest_url
+end
+
+actions.download = function(arg)
+	local download_to_subdir = false
+	for i, str in ipairs(arg) do
+		if str == "-D" then
+			download_to_subdir = true
+			table.remove(arg, i)
+			break
+		end
+	end
+	local available_files = read_available_files()
+	local list = user_input_to_urls(arg, available_files)
+	if #list == 0 then
+		err_exit("error: no download url specified\n")
+	end
+	io.stderr:write("\n#### Downloading " .. #list .. " files\n\n")
+
+	for i, url_frag in ipairs(list) do
+		io.stderr:write("\n#### Downloading file " .. i .. "/" .. #list .. "\n\n")
+		local is_checksum = url_frag:match("^@checksums")
+		url_frag = url_frag:match("^@checksums(.*)$") or url_frag -- remove @checksums if necessary
+		local url = "http://www.gog.com" .. url_frag
+
+		io.stderr:write("\n#### Retrieving filename\n\n")
+		local response = wget.get_metadata(url, true)
+		local filename = assert(response:match("\nLocation:%s+http://.*/([^?]+)%?"), "failed to extract filename")
+		if is_checksum then
+			filename, url = get_checksum_filename_and_url(filename, response)
+		end
+
+		if download_to_subdir then
+			local gamename = url_frag:match("game/([%w_]+)/") or url_frag:match("file/([%w_]+)/")
+			if not gamename then
+				err_exit("failed to extract game name from url fragment '%s'\n", url_frag)
+			end
+			cexec('mkdir -p "%s"', gamename)
+			filename = gamename .. "/" .. filename
+		end
+
+		io.stderr:write("\n#### Downloading file\n\n")
+		wget.download_file(url, filename, cexec)
+	end
+	io.stderr:write("\n#### Downloading complete\n\n")
+end
+
+actions.getlist = function(arg)
+	-- This just gets the list, and extracts all the urls. Won't do filtering
+	io.stderr:write("\n#### Fetching game list\n\n")
+	local content = wget.download_file(ACCOUNT_URL, "-", capture)
+	local urls = {}
+	for url in content:gmatch('(/en/download/%w+/[^"]+)') do
+		urls[#urls + 1] = url
+	end
+	if #urls == 0 then
+		err_exit("Failed to extract any available downloads (not logged in?) Try gogdl login\n")
+	end
+	local output = assert(io.open(FILE_LIST, "w"))
+	for _, url in ipairs(urls) do
+		output:write(url, "\n")
+	end
+	assert(output:close())
+	io.stderr:write("Successfully fetched file list\n")
+end
+
+actions.list = function(arg)
+	local available_files = read_available_files()
+	local list = {}
+
+	if #arg == 0 then
+		-- just show game names
+		local seen = {}
+		for _, frag in ipairs(available_files) do
+			local gamename = frag:match("game/([%w_]+)/")
+			if gamename and not seen[gamename] then
+				seen[gamename] = true
+				list[#list + 1] = gamename
+			end
+		end
+	elseif #arg == 1 and arg[1] == "--all" then
+		list = available_files
+		table.remove(arg, 1) -- shift
+	else
+		list = user_input_to_urls(arg, available_files)
+	end
+
+	for _, v in ipairs(list) do
+		print(v)
+	end
+end
+
+-- checks if file exists, and if it does gets the length
+local function file_exists(filename)
+	local f = io.open(filename, "r")
+	if f then
+		local size = f:seek("end")
+		io.close(f)
+		return true, size
+	else
+		return false
+	end
+end
+
+-- See if a file with 'filename' exists, and if it does verify that it has the
+-- desired length. Return a result table in the format:
+-- { match = bool, filename = filename, local_length = length, remote_length = length,
+-- desc = description of problem }
+local function check_local_file(filename, length)
+	local exists, local_length = file_exists(filename)
+	if exists then
+		if local_length == length then
+			return {
+				match = true,
+				filename = filename,
+				remote_length = length,
+				local_length = length,
+				desc = "Success - local and remote length match",
+			}
+		else
+			return {
+				match = false,
+				filename = filename,
+				remote_length = length,
+				local_length = length,
+				desc = "Local file has different length to remote",
+			}
+		end
+	else
+		return {
+			match = false,
+			filename = filename,
+			remote_length = length,
+			desc = "No local file exists with that name",
+		}
+	end
+end
+
+actions.check = function(arg)
+	local available_files = read_available_files()
+	local list = user_input_to_urls(arg, available_files)
+
+	if #list == 0 then
+		err_exit("No recognised game files to perform check on. See `gogdl help` for usage.\n")
+	end
+
+	local results = {}
+	for i, url_frag in ipairs(list) do
+		io.stderr:write("\n#### Checking file " .. i .. "/" .. #list .. "\n\n")
+		local url = "http://www.gog.com" .. url_frag
+
+		local filename
+
+		if url_frag:match("^@checksums") then
+			url_frag = url_frag:match("^@checksums(.*)$") -- remove @checksums
+			url = "http://www.gog.com" .. url_frag
+			local response = wget.get_metadata(url, true)
+			filename = assert(response:match("\nLocation:%s+http://.*/([^?]+)%?"), "failed to extract filename")
+			filename, url = get_checksum_filename_and_url(filename, response)
+		end
+
+		io.stderr:write("\n#### Retrieving metadata\n\n")
+		local response = wget.get_metadata(url, false)
+		-- don't need to extract the filename if operating on a checksum file
+		filename = filename or assert(response:match("\nLocation:%s+http://.*/([^?]+)%?"), "failed to extract filename")
+		local length = assert(response:match("\nLength:%s+(%d+)%s+"))
+		local result = check_local_file(filename, tonumber(length))
+		results[#results + 1] = result
+		if result.match then
+			print(
+				("SUCCESS: local file %s has length %d identical to remote"):format(
+					result.filename,
+					result.remote_length
+				)
+			)
+		else
+			print(("FAILURE: %s - %s"):format(result.filename, result.desc))
+		end
+	end
+
+	-- print all successes
+	print("\n\n")
+	print("## CHECK RESULTS")
+	for _, result in ipairs(results) do
+		if result.match then
+			print(
+				("SUCCESS: local file %s has length %d identical to remote"):format(
+					result.filename,
+					result.remote_length
+				)
+			)
+		end
+	end
+	-- print all failures
+	for _, result in ipairs(results) do
+		if not result.match then
+			print(("FAILURE: %s - %s"):format(result.filename, result.desc))
+		end
+	end
+end
+
+actions.checksum = function(arg)
+	local gen_md5 = arg[1] == "--convert"
+	if gen_md5 then
+		table.remove(arg, 1)
+	end
+
+	if #arg == 0 then
+		err_exit("gogdl checksum requires arguments. See `gogdl help` for usage.\n")
+	end
+	local function process_filename(filename)
+		local f, err = io.open(filename, "r")
+		if not f then
+			return nil, err
+		end
+		if not (f:read(5) == "<file") then
+			f:close()
+			return nil, "file in unrecognised format. Does not start with <file"
+		end
+		local line = f:read("*l")
+		local target_name, target_md5 = line:match('name%s*=%s*"([^"]+)".*md5%s*=%s*"([^"]+)"')
+		f:close()
+		if not target_name or not target_md5 then
+			return nil, "failed to extract target filename and md5"
+		end
+
+		local target_path = filename:gsub("([^/]*)$", "", 1)
+		if not gen_md5 then -- actually perform the check
+			local succ, cmd = exec('echo %s  " %s%s" | md5sum -c -', target_md5, target_path, target_name)
+			if not succ then
+				return nil, "md5sum failed"
+			end
+		else -- generate md5 file for stdout
+			io.stdout:write(("%s  %s%s\n"):format(target_md5, target_path, target_name))
+		end
+		return true
+	end
+
+	for _, filename in ipairs(arg) do
+		local succ, err = process_filename(filename)
+		if not succ then
+			io.stderr:write("Failed to process `", filename, "`: ", err, "\n")
+		end
+	end
+end
+
+actions.help = function(arg)
+	io.stderr:write([[
+Usage: gogdl ACTION [ARGS...]
+Valid actions are:
+
+help:
+  Shows this help message
+login:
+  Prompts for username and password and retrieves a login cookie
+getlist:
+  Retrieves the list of available downloads from your gog account
+list [--all | FILE_LIST]:
+  With no arguments, gives a list of the game names available to download. 
+  When given `--all` will list all available URL fragments (i.e. setup and 
+  extra files). Can also be given arguments as taken by `gogdl download` to 
+  act as a preview for what files would be downloaded. See below for a 
+  description of FILE_LIST
+download [-D] [FILE_LIST]:
+  Dowloads the specified file(s). See below for a description of FILE_LIST. If 
+  the `-D` option is given then all game files are downloaded to an 
+  appropriately named subdirectory (which is created if necessary).
+check [FILE_LIST]:
+  Querys the GOG download servers for the size of the specified file(s) and 
+  verifies that a local file with the correct filename exists, and that the 
+  length matches. Prints a summary of those files which match and those which 
+  do not.
+checksum [--convert] [XML_FILES]:
+  Given a list of files containing md5 data in the XML format GOG uses, 
+  extract the checksum for each file and check it. Input XML files can be 
+  obtained using `gogdl download @gamename-checksums`. It is assumed that the 
+  file described by the XML input is in the same folder as that input. i.e. 
+  `gogdl checksumm gamename/setup_gamename.exe.xml` will look for 
+  `gamename/setup_gamename.exe` to verify its md5 sum. If `--convert` is 
+  specified, then checksums for each file will be extracted from the .xml 
+  files and output to stdout in a form that can be recognised by coreutils 
+  md5sum.
+
+The FILE_LIST can take the form of:
+1) @gamename-all to download all files from a certain game, @gamename-setup 
+   for just the setup files, @gamename-extras for just the extras, and 
+   @gamename-checksums for just the .xml files containing checksums for each 
+   setup file.
+2) A full URL of the form http://www.gog.com/en/download/*
+3) An abbreviated url of the form /en/download/*
+
+You will need to run gogdl getlist before @gamename-* can be matched, and of 
+course you'll want to gogdl login before anything else. Example first-time 
+usage:
+
+    gogdl login
+    gogdl getlist
+    gogdl download @the_longest_journey-all
+    gogdl checksum setup_tlj.exe.xml
+
+]])
+end
+
+local action = arg[1] or "help"
+if actions[action] then
+	table.remove(arg, 1) -- shift
+	actions[action](arg)
+else
+	err_exit("'%s' is not a recognised action\n", action)
+end
