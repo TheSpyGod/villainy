@@ -16,11 +16,15 @@ Lekki launcher gier dla systemu Linux, który łączy biblioteki Epic Games i GO
 
 #### Instalacja i konfiguracja
 ##### 1. Konfiguracja środowiska
-Wymagane narzędzia CLI (legendary oraz gogdl) są dołączone do struktury zależności projektu. Upewnij się, że masz zainstalowane python3 oraz pip w swoim systemie, a następnie:
+Wymagane narzędzia CLI (legendary oraz gogdl). Upewnij się, że masz zainstalowane python3 oraz pip w swoim systemie, a następnie:
 
 ```
 ``` # Instalacja zależności projektu
-pnpm install
+pipx install legendary-gl &&
+
+pipx install gogdl &&
+
+pnpm install &&
 
 # Budowanie backendu
 cd src-tauri && cargo build --release

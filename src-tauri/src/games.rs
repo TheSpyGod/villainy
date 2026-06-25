@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use crate::db::Database;
 
-static legendary: &str = "legendary";
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Game {
     pub name: String,
@@ -61,7 +59,7 @@ pub async fn get_gog_games() -> Result<Vec<Game>, String> {
 pub fn uninstall_game_logic(game: &Game) -> Result<String, String> {
     match game.platform.as_str() {
         "epic" => {
-            let status = std::process::Command::new(legendary)
+            let status = std::process::Command::new("legendary")
                 .args(["uninstall", &game.name, "--yes"])
                 .status().map_err(|e| e.to_string())?;
             if status.success() { Ok("uninstalled".to_string()) } else { Err("Epic uninstall failed".to_string()) }
@@ -78,24 +76,16 @@ pub fn uninstall_game_logic(game: &Game) -> Result<String, String> {
 }
 
 async fn get_epic_games() -> Result<Vec<Game>, String> {
-    let output = Command::new(legendary)
+    let output = Command::new("legendary")
         .arg("list")
-        .env_clear()
-        .env("PATH", "/usr/bin:/bin:/usr/local/bin:/home/shreadr/.local/bin")
-        .env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/home/shreadr".to_string()))
-        .env("LANG", "en_US.UTF-8")
-        .env("HOME", get_home())
         .output()
         .map_err(|e| format!("legendary error: {}", e))?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    
-    // DEBUG: Zapisz wyjście do pliku, aby sprawdzić co widzi aplikacja
-    let _ = std::fs::write(format!("{}/debug_legendary.txt", get_home()), stdout.as_bytes());
 
     if !output.status.success() {
         return Err(format!("Legendary failed: {}", String::from_utf8_lossy(&output.stderr)));
     }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut installed_names = std::collections::HashSet::new();
@@ -224,7 +214,7 @@ pub fn launch_game(game: Game, db_lock: Arc<Mutex<Database>>) -> Result<Child, S
 pub async fn install_game(game: Game) -> Result<String, String> {
     match game.platform.as_str() {
         "epic" => {
-            let output = Command::new(legendary).args(["install", &game.name, "--yes", "--skip-sdl"]).output().map_err(|e| e.to_string())?;
+            let output = Command::new("legendary").args(["install", &game.name, "--yes", "--skip-sdl"]).output().map_err(|e| e.to_string())?;
             let out = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
             if out.contains("already up to date") || out.contains("Download size is 0") { Ok("already_installed".to_string()) }
             else if output.status.success() { Ok("installed".to_string()) } else { Err(out) }
