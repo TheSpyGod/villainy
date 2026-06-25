@@ -19,15 +19,14 @@ Lekki launcher gier dla systemu Linux, który łączy biblioteki Epic Games i GO
 Wymagane narzędzia CLI (legendary oraz gogdl). Upewnij się, że masz zainstalowane python3 oraz pip w swoim systemie, a następnie:
 
 ```
-``` # Instalacja zależności projektu
 pipx install legendary-gl &&
 
 pipx install gogdl &&
 
 pnpm install &&
 
-# Budowanie backendu
-cd src-tauri && cargo build --release
+# Budowanie projektu
+pnpm tauri build
 ```
 
 ##### 2. Uwierzytelnianie
@@ -37,14 +36,12 @@ Zanim aplikacja będzie mogła pobrać Twoją bibliotekę gier, musisz uwierzyte
 **Epic Games (legendary):**
 
 ```
-source ./venv/bin/activate &&
 legendary auth
 ```
 
 **GOG (gogdl):**
 
 ```
-source ./venv/bin/activate &&
 gogdl login
 ``` 
 
