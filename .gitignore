@@ -1,3 +1,22 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Node.js
+node_modules/
+dist/
+.output/
+
+# Tauri
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/ # Opcjonalnie, jeśli są generowane automatycznie
+
+# System/IDE
+.DS_Store
+.vscode/
+.idea/
+
 # Logs
 logs
 *.log
