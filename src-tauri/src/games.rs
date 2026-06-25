@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use crate::db::Database;
 
-static legendary: &str = "/home/shreadr/.local/bin/legendary";
+static legendary: &str = "legendary";
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Game {
@@ -80,9 +80,10 @@ pub fn uninstall_game_logic(game: &Game) -> Result<String, String> {
 async fn get_epic_games() -> Result<Vec<Game>, String> {
     let output = Command::new(legendary)
         .arg("list")
-        .env_remove("PYTHONHOME")
-        .env_remove("PYTHONPATH")
-        .env_remove("PYTHONEXECUTABLE")
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin:/usr/local/bin:/home/shreadr/.local/bin")
+        .env("HOME", std::env::var("HOME").unwrap_or_else(|_| "/home/shreadr".to_string()))
+        .env("LANG", "en_US.UTF-8")
         .env("HOME", get_home())
         .output()
         .map_err(|e| format!("legendary error: {}", e))?;
