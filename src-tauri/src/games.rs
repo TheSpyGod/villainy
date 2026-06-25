@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use crate::db::Database;
 
+static legendary: &str = "/home/shreadr/.local/bin/legendary";
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Game {
     pub name: String,
@@ -59,7 +61,7 @@ pub async fn get_gog_games() -> Result<Vec<Game>, String> {
 pub fn uninstall_game_logic(game: &Game) -> Result<String, String> {
     match game.platform.as_str() {
         "epic" => {
-            let status = std::process::Command::new("legendary")
+            let status = std::process::Command::new(legendary)
                 .args(["uninstall", &game.name, "--yes"])
                 .status().map_err(|e| e.to_string())?;
             if status.success() { Ok("uninstalled".to_string()) } else { Err("Epic uninstall failed".to_string()) }
@@ -76,7 +78,7 @@ pub fn uninstall_game_logic(game: &Game) -> Result<String, String> {
 }
 
 async fn get_epic_games() -> Result<Vec<Game>, String> {
-    let output = Command::new("legendary")
+    let output = Command::new(legendary)
         .arg("list")
         .output()
         .map_err(|e| format!("legendary error: {}", e))?;
@@ -168,7 +170,7 @@ pub fn get_game_install_dir(name: &str, launch_id: &str, platform: &str) -> Resu
                     }
                 }
             }
-            Ok(PathBuf::from(&home).join("legendary").join(launch_id))
+            Ok(PathBuf::from(&home).join(legendary).join(launch_id))
         }
         "gog" => Ok(std::env::current_dir().unwrap_or_default().join("gogdl").join(name.replace(' ', "_"))),
         _ => Err("Unknown platform".to_string()),
@@ -214,7 +216,7 @@ pub fn launch_game(game: Game, db_lock: Arc<Mutex<Database>>) -> Result<Child, S
 pub async fn install_game(game: Game) -> Result<String, String> {
     match game.platform.as_str() {
         "epic" => {
-            let output = Command::new("legendary").args(["install", &game.name, "--yes", "--skip-sdl"]).output().map_err(|e| e.to_string())?;
+            let output = Command::new(legendary).args(["install", &game.name, "--yes", "--skip-sdl"]).output().map_err(|e| e.to_string())?;
             let out = format!("{}{}", String::from_utf8_lossy(&output.stdout), String::from_utf8_lossy(&output.stderr));
             if out.contains("already up to date") || out.contains("Download size is 0") { Ok("already_installed".to_string()) }
             else if output.status.success() { Ok("installed".to_string()) } else { Err(out) }
