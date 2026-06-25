@@ -1,40 +1,52 @@
 import { invoke } from "@tauri-apps/api/core";
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import "./css/App.css";
 
-const cleanGameName = (name) => name?.replace(/\*/g, "").trim() || "";
+interface Game {
+  id: string | number;
+  name: string;
+  platform: string;
+  is_installed: boolean;
+  rating: number;
+}
+
+interface Stat {
+  game_name: string;
+  platform: string;
+  total_playtime_minutes: number;
+  rating: number;
+}
+
+const cleanGameName = (name: string) => name?.replace(/\*/g, "").trim() || "";
 
 function App() {
-  const [games, setGames] = useState([]);
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
-  const [downloadingGame, setDownloadingGame] = useState(null);
-  const [stats, setStats] = useState([]);
-  const [activeSessions, setActiveSessions] = useState([]);
+  const [games, setGames] = useState<Game[]>([]);
+  const [filter, _setFilter] = useState("all");
+  const [_loading, setLoading] = useState(true);
+  const [downloadingGame, setDownloadingGame] = useState<string | number | null>(null);
+  const [stats, setStats] = useState<Stat[]>([]);
   const [protonPath, setProtonPath] = useState("");
 
   useEffect(() => {
     (async () => {
-      const path = await invoke("get_proton_path_command").catch(console.error);
+      const path = await invoke<string>("get_proton_path_command").catch(console.error);
       if (path) setProtonPath(path);
       await loadGamesAndStats();
-      checkSessions();
     })();
   }, []);
 
   const loadGamesAndStats = async () => {
     setLoading(true);
     try {
-      const [rawGames, userStats] = await Promise.all([
-        invoke("fetch_all_games"),
-        invoke("get_all_stats")
-      ]);
+      const rawGames: any = await invoke("fetch_all_games");
+      const userStats: any = await invoke("get_all_stats");
+      
       setStats(userStats || []);
-      setGames(rawGames.map((g) => ({
+      setGames(rawGames.map((g: any) => ({
         ...g,
         name: cleanGameName(g.name),
-        rating: userStats?.find(s => s.game_name === g.name && s.platform === g.platform)?.rating || 0,
+        rating: userStats?.find((s: Stat) => s.game_name === g.name && s.platform === g.platform)?.rating || 0,
         is_installed: g.is_installed ?? false
       })));
     } catch (e) {
@@ -45,7 +57,7 @@ function App() {
   };
 
   const handleSelectProton = async () => {
-    const selected = await open({ multiple: false, directory: false });
+    const selected: any = await open({ multiple: false, directory: false });
     const path = selected && typeof selected === "object" ? selected.path : selected;
     if (path) {
       setProtonPath(path);
@@ -53,24 +65,24 @@ function App() {
     }
   };
 
-  const handleRate = async (game, rating) => {
+  const handleRate = async (game: Game, rating: number) => {
     await invoke("rate_game", { gameName: game.name, platform: game.platform, rating });
     loadGamesAndStats();
   };
 
-  const handleLaunch = async (game) => {
+  const handleLaunch = async (game: Game) => {
     await invoke("launch_game_tracked", { game }).catch(alert);
     setTimeout(loadGamesAndStats, 2000);
   };
 
-  const handleInstall = async (game) => {
+  const handleInstall = async (game: Game) => {
     setDownloadingGame(game.id);
     await invoke("install_game_command", { game }).catch(alert);
     setDownloadingGame(null);
     loadGamesAndStats();
   };
 
-  const handleUninstall = async (game) => {
+  const handleUninstall = async (game: Game) => {
     if (!window.confirm(`Are you sure you want to uninstall ${game.name}?`)) return;
     
     setDownloadingGame(game.id);
@@ -88,6 +100,7 @@ function App() {
 
   return (
     <div className="container">
+      {/* Reszta Twojego JSX pozostaje bez zmian */}
       <div className="header">
         <div className="proton-config-bar">
           <span style={{ color: protonPath ? "#4CAF50" : "#FF5722" }}>
